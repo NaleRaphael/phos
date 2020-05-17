@@ -63,11 +63,6 @@ class EDF(object):
     def orig_units(self):
         return self.raw._orig_units
 
-    def set_bipolar_reference(self, val):
-        # https://mne.tools/stable/generated/mne.set_bipolar_reference.html
-        # self.raw.set_montage()
-        raise NotImplementedError
-
     @classmethod
     def from_file(cls, fn, config_name=None):
         """
@@ -123,8 +118,8 @@ class EDF(object):
 
         channels = asarray(channels) if channels else self.channels
 
-        # Decouple specified channels to those channels listed in raw data
-        anodes, cathodes = self.montage.decouple(channels)
+        # Decompose specified channels to those channels listed in raw data
+        anodes, cathodes = self.montage.decompose(channels)
         if self.montage.is_all_unipolar:
             picks = anodes
         else:
@@ -173,9 +168,9 @@ class EDF(object):
         e.g. For a 10-seconds segment of signal `x`, given an annotation:
             {'seiz': [3.0, 6.0]}
             >>> x.anno_to_samples(0, 8, 1)
-            []
+            [0, 0, 0, 1, 1, 1, 0, 0]
         """
-        pass
+        raise NotImplementedError
 
     @staticmethod
     def resample(data, fs_ori, fs_new, window='boxcar'):

@@ -235,13 +235,13 @@ class Montage(object):
             raise ValueError(f'orig_units mismatched in channels: {mismatched}, '
                 'In anodes: {xa}; In cathodes: {xc}')
 
-    def decouple(self, ch_names):
-        """ Decouple given channels to their own composition.
+    def decompose(self, ch_names):
+        """ Decompose given channels to their own composition.
 
         Parameters
         ----------
         ch_names : array_like of str
-            Channels of current montage to be decoupled.
+            Channels of current montage to be decomposed.
 
         Returns
         -------
@@ -282,7 +282,7 @@ class Montage(object):
                 raise ValueError(f'Channels not found: {missing}')
 
         raw_ch_names = np.asarray(raw_ch_names)
-        anodes, cathodes = self.decouple(ch_names)
+        anodes, cathodes = self.decompose(ch_names)
 
         # Locate anodes in raw_ch_names
         idx_anodes = np.nonzero(anodes[:, None] == raw_ch_names)[1]

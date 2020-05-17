@@ -45,9 +45,8 @@ class TUSZDataset(Dataset):
 
     @classmethod
     def load_from(
-        cls, root, kind, sample_length,
-        force_update=False, csv_file=None, extra_dir=None, montage=None,
-        aug_shift=False, desired_fs=None,
+        cls, root, kind, sample_length, force_update=False, csv_file=None,
+        extra_dir=None, aug_shift=False, desired_fs=None,
     ):
         """
         Parameters
@@ -66,7 +65,6 @@ class TUSZDataset(Dataset):
             - calibration_[kind].csv:
                 Calibration interval of data.
                 Fields: ['filename', 'start', 'stop']
-        montage : str or Montage
         aug_shift : bool
         desired_fs : int
         """
@@ -122,8 +120,7 @@ class EDFDataset(Dataset):
     HEADER = ['filename', 'duration']
     CALB_HEADER = ['filename', 'start', 'stop']
     def __init__(
-        self, content, sample_length, montage=None, aug_shift=False,
-        desired_fs=None
+        self, content, sample_length, aug_shift=False, desired_fs=None
     ):
         """
         Parameters
@@ -131,8 +128,7 @@ class EDFDataset(Dataset):
         content : pd.DataFrame
         sample_length : int
             Length of a sample. (unit: second)
-        montage : str or Montage class, default is None
-            Montage of EEG.
+        #     Montage of EEG.
         aug_shift : bool, default is False
             As a simple augmentation, signal will be shifted with a random offset
             while retrieving it.
@@ -151,7 +147,6 @@ class EDFDataset(Dataset):
         self.aug_shift = aug_shift
         self.desired_fs = desired_fs
         self.cumsum = np.cumsum(content.duration.values)
-        self.set_montage(montage)
 
     def __len__(self):
         return int(np.floor(self.cumsum[-1] / self.sample_length))
@@ -169,9 +164,8 @@ class EDFDataset(Dataset):
 
     @classmethod
     def from_dir(
-        cls, dir_name, sample_length,
-        force_update=False, csv_file=None, calb_file=None, montage=None,
-        aug_shift=False, desired_fs=None
+        cls, dir_name, sample_length, force_update=False, csv_file=None,
+        calb_file=None, aug_shift=False, desired_fs=None
     ):
         print('Loading EDF files from "%s" ...' % dir_name)
         if not force_update and csv_file and Path(csv_file).exists():
@@ -179,7 +173,7 @@ class EDFDataset(Dataset):
                 'List of EDFDataset has been created. '
                 'Loading from it at: "%s"' % (Path(csv_file).as_posix())
             )
-            return cls(pd.read_csv(csv_file), sample_length, montage=montage,
+            return cls(pd.read_csv(csv_file), sample_length,
                        aug_shift=aug_shift, desired_fs=desired_fs)
 
         edf_list = EDFCollector.from_dir(dir_name)
@@ -194,7 +188,7 @@ class EDFDataset(Dataset):
         df.to_csv(csv_file, header=cls.HEADER, index=False)
 
         return cls(
-            df, sample_length, montage=montage, aug_shift=aug_shift, desired_fs=None
+            df, sample_length, aug_shift=aug_shift, desired_fs=None
         )
 
     @classmethod
@@ -234,12 +228,9 @@ class EDFDataset(Dataset):
         print('Collecting duration of files ...')
         durations = np.empty(len(edf_list))
         for i, fn in tqdm(enumerate(edf_list), total=len(edf_list), ascii=True):
-            # durations[i] = EDFHeader.from_file(str(fn.absolute())).duration
             durations[i] = EDF.from_file(str(fn.absolute())).duration
         return durations
 
-    def set_montage(self, val):
-        self.montage = val if isinstance(val, Montage) else Montage(val)
 
     def get_item(self, idx):
         if isinstance(idx, (tuple, list)):
@@ -300,21 +291,19 @@ class EDFDataset(Dataset):
         return index, offset
 
     def get_chunk(self, index, offset, channels=None):
-        # https://github.com/openai/jukebox/blob/master/jukebox/data/files_dataset.py#L79
-        fn = self.files[index]
+        fn = str(self.files[index])
         match = regex_montage_config.search(fn)
         if match is None:
             raise RuntimeError('Failed to parse config of montage from file path.')
         config_name = match.groups()[0]
         edf = EDF.from_file(fn, config_name=config_name)
         t_start, t_stop = offset, offset + self.sample_length
-        import pdb; pdb.set_trace()
         chunk = edf.get_data(
             t_start=t_start, t_stop=t_stop, channels=channels,
             resample_fs=self.desired_fs
         )
-        # edf.set_montage()
         if self.labels:
-            pass
+            anno = edf.anno_to_samples(t_start, t_stop, self.sample_length, channels=channels)
+            return chunk, anno
         else:
             return chunk
