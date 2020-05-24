@@ -42,12 +42,12 @@ class AnnotationProcessor(object):
 
         # convert object arrays to normal ndarray
         probs = np.stack(ary['probs'])
-        max_indices = probs.argmax()
+        max_indices = probs.argmax(axis=1)
 
         outputs = np.empty(ary.size, dtype=self.output_fmt)
         outputs[['ch', 'ts', 'te']] = ary[['ch', 'ts', 'te']]
         outputs['anno'] = max_indices
-        outputs['prob'] = probs[:, max_indices]
+        outputs['prob'] = probs[np.arange(len(max_indices)), max_indices]
         return outputs
 
     def add_annotation(self, converted, anno, to_channels=None, sort_by=None,

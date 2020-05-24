@@ -64,7 +64,7 @@ class EDF(object):
         return self.raw._orig_units
 
     @classmethod
-    def from_file(cls, fn, config_name=None):
+    def from_file(cls, fn, config_name=None, verbose=False):
         """
         Parameters
         ----------
@@ -74,8 +74,9 @@ class EDF(object):
             Montage configuration of file. If it is not given, all channels in
             EDF file will be used directly. (no matter they are unipolar or
             bipolar references)
+        verbose : bool, default is False
         """
-        return cls(read_edf(str(fn)), config_name=config_name)
+        return cls(read_edf(str(fn), verbose=verbose), config_name=config_name)
 
     def get_data(self, t_start=0, t_stop=None, channels=None,
         unit='microvolt', rescale=None, resample_fs=None):
