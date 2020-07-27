@@ -171,17 +171,16 @@ class Montage(object):
             else:
                 self.channels = DEFAULT_MONTAGE_DICT[config_name]
         elif channels:
-            try:
-                channels = asarray(channels)
-                if channels.ndim != 2 or channels.shape[-1] != 3:
-                    raise ValueError('Incorrect format of channels')
-                self.channels = {i: _Ch(*v) for i, v in enumerate(channels)}
-            except:
-                raise ValueError('Unknown format of channels.')
-            if not all([isintance(v, _Ch) for v in channels]):
-                raise ValueError(f'Type of elements in `channels` should be {_Ch}')
-            else:
+            if all([isinstance(v, _Ch) for v in channels]):
                 self.channels = channels
+            else:
+                try:
+                    channels = asarray(channels)
+                    if channels.ndim != 2 or channels.shape[-1] != 3:
+                        raise ValueError('Incorrect format of channels')
+                    self.channels = {i: _Ch(*v) for i, v in enumerate(channels)}
+                except:
+                    raise ValueError('Unknown format of channels.')
         else:
             # No given `config_name` and `channels`, use channels in raw data directly.
             # In this case, all channels will be taken as uniploar referece.
