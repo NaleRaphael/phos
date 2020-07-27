@@ -46,7 +46,7 @@ class TUSZDataset(Dataset):
     @classmethod
     def load_from(
         cls, root, kind, sample_length, force_update=False, csv_file=None,
-        extra_dir=None, aug_shift=False, desired_fs=None,
+        extra_dir=None, aug_shift=False, desired_fs=None, return_labels=False
     ):
         """
         Parameters
@@ -59,17 +59,25 @@ class TUSZDataset(Dataset):
         sample_length : int
             Length of a sample. (unit: second)
         force_update : bool
+            See also the definition in `EDFDataset.from_dir()`.
         csv_file : str, pathlib.Path or None
+            A csv file that contains names and paths of files in dataset.
         extra_dir : str, pathlib.Path or None
             Directory of files containing extra information for dataset preprocessing.
             - calibration_[kind].csv:
                 Calibration interval of data.
                 Fields: ['filename', 'start', 'stop']
-        aug_shift : bool
-        desired_fs : int
+        aug_shift : bool, default is False
+            See also the definition in `EDFDataset.__init__()`.
+        desired_fs : int, default is None
+            See also the definition in `EDFDataset.__init__()`.
+        return_labels : bool, default is False
+            See also the definition in `EDFDataset.__init__()`.
         """
         if kind not in cls._DATASET_KINDS:
             raise ValueError('Given `kind` should be one of %s' % cls._DATASET_KINDS)
+        if return_labels and kind == 'eval':
+            raise ValueError('Annotations are not available in "eval" dataset.')
 
         if extra_dir:
             fn_calb = 'calibration_%s.csv' % kind
@@ -83,13 +91,14 @@ class TUSZDataset(Dataset):
             calb_file = None
 
         datasets = []
+
         for entry in cls._DATASET_ENTRIES:
             csv_file = Path(extra_dir, 'edfs_%s.csv' % entry)
             ds = EDFDataset.from_dir(
                 Path(root, entry), sample_length,
                 force_update=force_update, csv_file=csv_file,
                 calb_file=calb_file, aug_shift=aug_shift,
-                desired_fs=desired_fs
+                desired_fs=desired_fs, return_labels=return_labels
             )
             datasets.append(ds)
 
@@ -120,7 +129,8 @@ class EDFDataset(Dataset):
     HEADER = ['filename', 'duration']
     CALB_HEADER = ['filename', 'start', 'stop']
     def __init__(
-        self, content, sample_length, aug_shift=False, desired_fs=None
+        self, content, sample_length, aug_shift=False, desired_fs=None,
+        return_labels=False
     ):
         """
         Parameters
@@ -128,13 +138,14 @@ class EDFDataset(Dataset):
         content : pd.DataFrame
         sample_length : int
             Length of a sample. (unit: second)
-        #     Montage of EEG.
         aug_shift : bool, default is False
             As a simple augmentation, signal will be shifted with a random offset
             while retrieving it.
         desired_fs : int, default is None
             If this value is given, retrieved signal segment will be resampled by
             this frequency if its sampling frequency is not equal to this one.
+        return_labels : bool, default is False
+            If true, annotation of each sample will be returned.
         """
         if not isinstance(content, pd.DataFrame):
             raise TypeError('Given `content` should be a `pd.DataFrame`.')
@@ -146,6 +157,7 @@ class EDFDataset(Dataset):
         self.sample_length = sample_length
         self.aug_shift = aug_shift
         self.desired_fs = desired_fs
+        self.return_labels = return_labels
         self.cumsum = np.cumsum(content.duration.values)
 
     def __len__(self):
@@ -165,7 +177,7 @@ class EDFDataset(Dataset):
     @classmethod
     def from_dir(
         cls, dir_name, sample_length, force_update=False, csv_file=None,
-        calb_file=None, aug_shift=False, desired_fs=None
+        calb_file=None, aug_shift=False, desired_fs=None, return_labels=False
     ):
         print('Loading EDF files from "%s" ...' % dir_name)
         if not force_update and csv_file and Path(csv_file).exists():
@@ -173,8 +185,10 @@ class EDFDataset(Dataset):
                 'List of EDFDataset has been created. '
                 'Loading from it at: "%s"' % (Path(csv_file).as_posix())
             )
-            return cls(pd.read_csv(csv_file), sample_length,
-                       aug_shift=aug_shift, desired_fs=desired_fs)
+            return cls(
+                pd.read_csv(csv_file), sample_length, aug_shift=aug_shift,
+                desired_fs=desired_fs, return_labels=return_labels
+            )
 
         edf_list = EDFCollector.from_dir(dir_name)
 
@@ -188,7 +202,8 @@ class EDFDataset(Dataset):
         df.to_csv(csv_file, header=cls.HEADER, index=False)
 
         return cls(
-            df, sample_length, aug_shift=aug_shift, desired_fs=None
+            df, sample_length, aug_shift=aug_shift, desired_fs=None,
+            return_labels=return_labels
         )
 
     @classmethod
@@ -302,8 +317,10 @@ class EDFDataset(Dataset):
             t_start=t_start, t_stop=t_stop, channels=channels,
             resample_fs=self.desired_fs
         )
-        if self.labels:
-            anno = edf.anno_to_samples(t_start, t_stop, self.sample_length, channels=channels)
+        if self.return_labels:
+            anno = edf.anno_to_samples(
+                t_start, t_stop, self.sample_length, channels=channels
+            )
             return chunk, anno
         else:
             return chunk

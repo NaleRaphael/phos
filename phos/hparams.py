@@ -76,4 +76,9 @@ DEFAULTS['data'] = Hyperparams(
     desired_fs      = 256,
     # f_lowpass       = 2,
     # f_highpass      = 128,
+    return_labels   = True,
+)
+
+DEFAULTS['env'] = Hyperparams(
+    seed            = 42,
 )

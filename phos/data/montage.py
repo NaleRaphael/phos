@@ -138,6 +138,21 @@ def get_common_montage_from_config(config_name, update_cache=False):
 
 class Montage(object):
     def __init__(self, raw, config_name=None, channels=None, use_common_montage=True):
+        """
+        Parameters
+        ----------
+        raw : mne.io.edf.edf.RawEDF
+        config_name : str, default is None
+            Configuration of montage, possible values are listed in `DEFAULT_MONTAGE_DICT`.
+        channels : array_like of Channel objects or tuple with 3 fields:
+                   [channel_name, anode, cathode], default is None
+            If this value and `config_name` are both None, `raw.ch_names` will
+            be used.
+        use_common_montage: bool, default is True
+            If `config_name` is given and this value is True, common channels
+            in those montages defined in `DEFAULT_MONTAGE_DICT` will be used.
+            Otherwise, channels of montage defined by `config_name` will be used.
+        """
         if not isinstance(raw, RawEDF):
             raise TypeError(f'Given raw object should be an instance of {RawEDF}.')
 
@@ -147,6 +162,7 @@ class Montage(object):
         )
 
         if config_name:
+            # Late initialization
             init_default_bipolar_montage()
             if config_name not in DEFAULT_MONTAGE_DICT:
                 raise ValueError(f'No corresponding montage found for {config_name}.')
@@ -155,11 +171,20 @@ class Montage(object):
             else:
                 self.channels = DEFAULT_MONTAGE_DICT[config_name]
         elif channels:
-            if not all([isintance(v, Channel) for v in channels]):
-                raise ValueError(f'Type of elements in `channels` should be {Channel}')
-            self.channels = channels
+            try:
+                channels = asarray(channels)
+                if channels.ndim != 2 or channels.shape[-1] != 3:
+                    raise ValueError('Incorrect format of channels')
+                self.channels = {i: _Ch(*v) for i, v in enumerate(channels)}
+            except:
+                raise ValueError('Unknown format of channels.')
+            if not all([isintance(v, _Ch) for v in channels]):
+                raise ValueError(f'Type of elements in `channels` should be {_Ch}')
+            else:
+                self.channels = channels
         else:
-            # No given `config_name` and `channels`, use channels in raw data directly
+            # No given `config_name` and `channels`, use channels in raw data directly.
+            # In this case, all channels will be taken as uniploar referece.
             self.channels = {idx: _Ch(name, name) for idx, name in enumerate(raw.ch_names)}
 
         raw_ch_names = asarray(raw.ch_names)
@@ -234,6 +259,10 @@ class Montage(object):
             xa, xc = o_units_anodes[~cmp_o_units], o_units_cathodes[~cmp_o_units]
             raise ValueError(f'orig_units mismatched in channels: {mismatched}, '
                 'In anodes: {xa}; In cathodes: {xc}')
+
+    def channel_to_index(self, ch_names):
+        """ Convert names of channels to indices in current montage. """
+        return np.nonzero(np.asarray(ch_names)[:, None] == self.names)[1]
 
     def decompose(self, ch_names):
         """ Decompose given channels to their own composition.
