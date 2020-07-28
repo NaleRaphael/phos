@@ -242,7 +242,7 @@ class EDF(object):
         if channels is not None:
             channels = np.asarray(channels)
             missing = np.setdiff1d(channels, self.channels)
-            if missing:
+            if missing.size:
                 raise ValueError(f'Given channels {missing} are not in current montage.')
         else:
             channels = self.channels
