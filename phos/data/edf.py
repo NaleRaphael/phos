@@ -291,10 +291,12 @@ class EDF(object):
                         dist = mid_points - ts
                     else:
                         dist = te - mid_points
-                    idx_min_dist = np.argmin(dist[idx_bad_samples], axis=0)
-                    new_mask = np.zeros_like(mask[:, idx_bad_samples])
+                    idx_min_dist = np.argmin(dist[:, idx_bad_samples], axis=0)
+                    new_mask = np.zeros_like(mask)
+                    # update bad samples only
                     new_mask[idx_min_dist, idx_bad_samples] = 1
-                    mask = new_mask
+                    # replace bad samples with those in `new_mask`
+                    mask[:, idx_bad_samples] = new_mask[:, idx_bad_samples]
 
             # - Found intervals without defined annotations
             if np.any(n_anno < n_anno_required):
