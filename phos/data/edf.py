@@ -36,7 +36,6 @@ class EDF(object):
         """
         self.raw = raw
         self.fs = raw.info['sfreq']
-        self.nchan = raw.info['nchan']
         self.duration = raw.n_times/self.fs
         self.extras = raw._raw_extras[0]
         assert len(raw._raw_extras) == 1, (
@@ -52,6 +51,10 @@ class EDF(object):
     @property
     def channels(self):
         return asarray(self.montage.names)
+
+    @property
+    def n_channels(self):
+        return len(self.montage.names)
 
     @property
     def pmax(self):
@@ -78,7 +81,7 @@ class EDF(object):
         return self.raw._orig_units
 
     @classmethod
-    def from_file(cls, fn, config_name=None, verbose=False):
+    def from_file(cls, fn, config_name=None, montage=None, verbose=False):
         """
         Parameters
         ----------
@@ -90,7 +93,8 @@ class EDF(object):
             bipolar references)
         verbose : bool, default is False
         """
-        return cls(read_edf(str(fn), verbose=verbose), config_name=config_name)
+        raw_edf = read_edf(str(fn), verbose=verbose)
+        return cls(raw_edf, config_name=config_name, montage=montage)
 
     def get_data(self, t_start=0, t_stop=None, channels=None,
         unit='microvolt', rescale=None, resample_fs=None):
@@ -126,12 +130,12 @@ class EDF(object):
         if rescale and rescale not in self.RESCALE_METHOD:
             raise ValueError(f'Given `rescale` should be one of {self.RESCALE_METHOD}')
 
-        if channels:
+        if channels is not None:
             missing = np.setdiff1d(channels, self.channels)
-            if missing:
+            if missing.size > 0:
                 raise ValueError(f'Given channels {missing} are not in current montage.')
 
-        channels = asarray(channels) if channels else self.channels
+        channels = asarray(channels) if channels is not None else self.channels
 
         # Decompose specified channels to those channels listed in raw data
         anodes, cathodes = self.montage.decompose(channels)
@@ -182,10 +186,22 @@ class EDF(object):
         cache_raw=True, allow_annotation_overlapping=False,
         select_overlapping='right'):
         """ Convert interval of annotations to discrete samples.
-        e.g. For a 10-seconds segment of signal `x`, given an annotation:
-            {'seiz': [3.0, 6.0]}
+        e.g. For a 10-second segment of signal `x`, given an annotation:
+            {1: [3.0, 6.0]}
             >>> x.get_annotations(0, 8, 1)
             [0, 0, 0, 1, 1, 1, 0, 0]
+
+        Note that boundary for determining an annotation is (start, stop] for
+        a middle point of the interval formed by t_start and t_stop.
+        e.g. For a 2-second segment of signal `x`, given an annotation:
+            {0: [0., 1.], 1: [1., 2.]}
+            >>> x.get_annotations(0.5, 1.5, 1)
+            [1]
+            # middle point of given interval [0.5, 1.5] is 1.
+            # - for annotaion `0`, boundary of determination: (0., 1.]
+            # - for annotaion `1`, boundary of determination: (1., 2.]
+            # In this case, middle point is in the range (0., 1.]. That's why
+            # it returns [1].
 
         Parameters
         ----------
@@ -220,6 +236,9 @@ class EDF(object):
         """
         # NOTE: In TUSZ dataset, annotations are annotated in according to montage
         # rather than raw channels.
+        if select_overlapping not in ['right', 'left']:
+            raise ValueError(f'Unsupported method to select annotations in overlapping '
+                f'segments: {select_overlapping}')
         if channels is not None:
             channels = np.asarray(channels)
             missing = np.setdiff1d(channels, self.channels)
@@ -247,7 +266,7 @@ class EDF(object):
             ts, te = ch_info['ts'][:, None], ch_info['te'][:, None]
             mid_points = np.arange(t_start, t_stop, sample_length) + sample_length/2
             samples = np.tile(mid_points, (ch_info.size, 1))
-            mask = ((ts <= samples) & (samples <= te)).astype(int)
+            mask = ((ts < samples) & (samples <= te)).astype(int)
 
             n_anno = np.sum(mask, axis=0)
             n_anno_required = np.ones(n_sample, dtype=int)
@@ -279,6 +298,7 @@ class EDF(object):
 
             # - Found intervals without defined annotations
             if np.any(n_anno < n_anno_required):
+                idx_bad_samples = np.where(n_anno < n_anno_required)[0]
                 msg = (
                     'Found intervals without definition.\n'
                     'Information:\n'

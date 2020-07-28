@@ -318,7 +318,7 @@ class EDFDataset(Dataset):
             resample_fs=self.desired_fs
         )
         if self.return_labels:
-            anno = edf.anno_to_samples(
+            anno = edf.get_annotations(
                 t_start, t_stop, self.sample_length, channels=channels
             )
             return chunk, anno
